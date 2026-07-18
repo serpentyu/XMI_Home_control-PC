@@ -5,5 +5,5 @@ XMI,control with PC. For personal entertainment purposes only，Not for commerci
 First : you can used Powershell send 
 cd C:\Users\smart-home-control
 pip install -r requirements.txt
-Then , Open browser, send ''http://localhost'' in your browser,
+Then , Open browser, send in your browser,
 The last step Start Using
