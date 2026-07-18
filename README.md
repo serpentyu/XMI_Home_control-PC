@@ -2,29 +2,8 @@
 XMI,control with PC. For personal entertainment purposes only，Not for commercial use
 
 2026-07-18 For V1.2 updata : 
-Fixed & Optimized Items
-💡 Screen Light Bar – Color Temperature Fix
-Root Cause: Color temperature is measured in Kelvin (K), ranging from 2700K (Warm Yellow) to 6500K (Cool White), instead of percentage values.
-Fix: The color temperature slider is adjusted to a 2700–6500K range, and temperature adjustment functions properly now.
-🔊 Smart Speaker – Toggle Removed & Volume Control Added
-Removed the redundant toggle button (speakers stay online continuously).
-A volume slider (0–100) is added to the secondary panel; verified functional with siid=2/piid=1.
-Play / Previous Track / Next Track buttons remain available (functionality may be limited on partial models).
-🌡️ Temperature & Humidity Sensor – Toggle Removed & Top Display Added
-Removed the toggle button for sensors.
-A top environmental info bar is newly added to display indoor temperature and humidity.
-Click the sensor card to view detailed data.
-⚠️ Data of Bluetooth devices may be delayed or require gateway synchronization.
-📶 Router – Toggle Removed & Status Display Added
-Removed the router toggle button.
-Network online status is shown on the top environmental bar.
-Click the card to view device model information.
-⚠️ Real-time network speed data is not yet supported by the official Mi Home API.
-📊 New Top Environmental Info Bar
-🌡️ Indoor Temperature
-💧 Indoor Humidity
-📶 Network Status
-📱 Number of Online Devices
-✏️ Custom Device Renaming (Retained Feature)
-Hover the mouse over a device card, and a pencil edit icon will appear in the top-right corner.
-Click the icon to rename the device; custom names are stored locally in the browser and persist after page refresh
+First : you can used Powershell send 
+cd C:\Users\smart-home-control
+pip install -r requirements.txt
+Then , Open browser, send http://localhost:5678 in your browser,
+The last step Start Using
