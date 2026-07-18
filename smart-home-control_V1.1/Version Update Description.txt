@@ -1,0 +1,9 @@
+UI Feature Specification (Professional English)
+Secondary Detail Card (Expand by clicking the device entry)
+Toggle Control (Top-right corner)
+Brightness Slider (Adjustable range: 1%–100%)
+Color Temperature Slider (Warm Yellow → Neutral White → Cool White)
+Custom Device Naming
+Hover over the device card: A pencil edit icon appears in the top-right corner
+Click the pencil icon to input a new device name
+Custom names are stored locally in the browser and remain intact after page refresh
