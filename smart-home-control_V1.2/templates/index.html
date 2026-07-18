@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>米家全屋智能控制中心</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        .device-card {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            transition: all 0.3s ease;
+        }
+        .device-card:hover {
+            border-color: rgba(59, 130, 246, 0.5);
+            transform: translateY(-2px);
+        }
+        .device-card.on {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+        }
+        .device-icon {
+            font-size: 2rem;
+            transition: all 0.3s ease;
+        }
+        .device-card.on .device-icon {
+            filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8));
+        }
+        /* 灯具开启时暖光效果 */
+        .device-card[data-type="light"].on .device-icon {
+            filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.7));
+        }
+        .device-card[data-type="light"].on {
+            background: rgba(251, 191, 36, 0.1);
+            border-color: rgba(251, 191, 36, 0.3);
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.1);
+        }
+        /* 二级详情面板 */
+        .detail-panel {
+            animation: slideDown 0.25s ease-out;
+        }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* 重命名按钮 - hover卡片时显示 */
+        .device-card:hover .rename-btn {
+            opacity: 1;
+        }
+        .rename-btn {
+            opacity: 0;
+            transition: opacity 0.2s;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px;
+        }
+        /* 空调模式按钮激活状态已在inline style处理 */
+        .ac-mode-btn {
+            transition: all 0.2s;
+            cursor: pointer;
+            border: 1px solid;
+        }
+        .ac-mode-btn:hover {
+            transform: scale(1.05);
+        }
+        /* 范围滑块样式优化 */
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }
+        .toggle-switch {
+            width: 48px;
+            height: 26px;
+            background: #475569;
+            border-radius: 13px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.3s;
+            flex-shrink: 0;
+        }
+        .toggle-switch.on {
+            background: #3b82f6;
+        }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+        }
+        .toggle-switch.on::after {
+            transform: translateX(22px);
+        }
+        .scene-card {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2));
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .scene-card:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+        }
+        .scene-card:active {
+            transform: scale(0.98);
+        }
+        .loading-spinner {
+            border: 3px solid rgba(59, 130, 246, 0.2);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .offline-badge {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            transition: all 0.3s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+        .login-card {
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+    </style>
+</head>
+<body class="text-slate-100">
+    <!-- 登录页 -->
+    <div id="loginPage" class="min-h-screen flex items-center justify-center p-4 hidden">
+        <div class="login-card rounded-2xl p-8 max-w-md w-full text-center">
+            <div class="text-5xl mb-4">🏠</div>
+            <h1 class="text-2xl font-bold mb-2">米家全屋智能控制中心</h1>
+            <p class="text-slate-400 mb-8">统一管理你家所有的智能设备</p>
+
+            <div id="loginBtnArea">
+                <button onclick="startLogin()" class="btn-primary w-full py-3 rounded-xl font-medium text-white">
+                    扫码登录米家账号
+                </button>
+                <p class="text-xs text-slate-500 mt-4">
+                    登录凭证仅保存在本地，不会上传到任何第三方服务器
+                </p>
+            </div>
+
+            <div id="loginWaiting" class="hidden">
+                <div class="bg-white rounded-xl p-4 mb-6 flex justify-center">
+                    <div id="qrImageContainer" class="text-center">
+                        <div class="loading-spinner mx-auto mb-2"></div>
+                        <p class="text-sm text-slate-500">二维码生成中...</p>
+                    </div>
+                    <img id="qrImage" class="w-48 h-48 hidden" alt="米家登录二维码" />
+                </div>
+                <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-6 text-left text-sm text-slate-300">
+                    <p class="font-medium mb-2 text-blue-400">📱 扫码登录步骤：</p>
+                    <ol class="space-y-1 list-decimal list-inside text-slate-400">
+                        <li>打开米家APP → 我的 → 扫一扫</li>
+                        <li>扫描上方二维码</li>
+                        <li>手机上确认授权登录</li>
+                        <li>扫码成功后页面自动跳转</li>
+                    </ol>
+                </div>
+                <p class="text-xs text-slate-500 text-center">
+                    登录凭证仅保存在本地，不会上传第三方服务器
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主界面 -->
+    <div id="mainApp" class="hidden">
+        <!-- 顶部导航 -->
+        <header class="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-lg border-b border-slate-700/50">
+            <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">🏠</span>
+                    <h1 class="text-xl font-bold">全屋智能控制中心</h1>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="deviceCount" class="text-sm text-slate-400 hidden sm:block">加载中...</span>
+                    <button onclick="refreshAll()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition flex items-center gap-1">
+                        <span>🔄</span>
+                        <span class="hidden sm:inline">刷新</span>
+                    </button>
+                    <button onclick="logout()" class="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm transition">
+                        退出
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto px-4 py-6">
+            <!-- 环境信息栏 -->
+            <div id="envBar" class="mb-6 hidden">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <!-- 温度 -->
+                    <div class="bg-gradient-to-br from-orange-500/10 to-red-500/10 backdrop-blur rounded-xl p-4 border border-orange-500/20">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-lg">🌡️</span>
+                            <span class="text-xs text-slate-400">室内温度</span>
+                        </div>
+                        <div class="text-2xl font-bold text-orange-400" id="envTemp">--°</div>
+                    </div>
+                    <!-- 湿度 -->
+                    <div class="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 backdrop-blur rounded-xl p-4 border border-cyan-500/20">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-lg">💧</span>
+                            <span class="text-xs text-slate-400">室内湿度</span>
+                        </div>
+                        <div class="text-2xl font-bold text-cyan-400" id="envHum">--%</div>
+                    </div>
+                    <!-- 路由器状态 -->
+                    <div class="bg-gradient-to-br from-green-500/10 to-emerald-500/10 backdrop-blur rounded-xl p-4 border border-green-500/20">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-lg">📶</span>
+                            <span class="text-xs text-slate-400">网络状态</span>
+                        </div>
+                        <div class="text-lg font-bold text-green-400" id="envNet">在线</div>
+                    </div>
+                    <!-- 在线设备数 -->
+                    <div class="bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur rounded-xl p-4 border border-blue-500/20">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-lg">📱</span>
+                            <span class="text-xs text-slate-400">在线设备</span>
+                        </div>
+                        <div class="text-2xl font-bold text-blue-400" id="envDevices">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 快捷场景 -->
+            <section class="mb-8">
+                <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <span>⚡</span> 快捷场景
+                </h2>
+                <div id="scenesGrid" class="flex gap-3 overflow-x-auto pb-2">
+                    <div class="text-slate-500 text-sm py-4">加载中...</div>
+                </div>
+            </section>
+
+            <!-- 房间设备 -->
+            <section id="roomsContainer">
+                <div class="text-center py-12 text-slate-500">
+                    <div class="loading-spinner mx-auto mb-4"></div>
+                    正在加载设备...
+                </div>
+            </section>
+        </main>
+
+        <!-- 底部状态栏 -->
+        <footer class="fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur border-t border-slate-700/50 py-2 px-4 text-center text-xs text-slate-500">
+            <span id="lastUpdate">未刷新</span>
+        </footer>
+    </div>
+
+    <script>
+        // 设备图标映射
+        const deviceIcons = {
+            light: '💡',
+            curtain: '🪟',
+            ac: '❄️',
+            sensor: '🌡️',
+            plug: '🔌',
+            switch: '🔘',
+            fan: '🌀',
+            humidifier: '💧',
+            purifier: '🌬️',
+            device: '📱'
+        };
+
+        // 初始化
+        async function init() {
+            const status = await checkLogin();
+            if (status.logged) {
+                showMainApp();
+                loadAll();
+            } else {
+                showLoginPage();
+            }
+        }
+
+        function showLoginPage() {
+            document.getElementById('loginPage').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+        }
+
+        function showMainApp() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+        }
+
+        // 检查登录状态
+        async function checkLogin() {
+            try {
+                const res = await fetch('/api/login-status');
+                return await res.json();
+            } catch (e) {
+                return { logged: false };
+            }
+        }
+
+        let pollTimer = null;
+
+        // 开始登录
+        async function startLogin() {
+            document.getElementById('loginBtnArea').classList.add('hidden');
+            document.getElementById('loginWaiting').classList.remove('hidden');
+
+            // 触发后端生成二维码（会在终端显示）
+            try {
+                await fetch('/api/qr-start', { method: 'POST' });
+            } catch (e) {
+                // 请求立即返回，登录在后台线程
+            }
+
+            // 开始轮询登录状态
+            startPolling();
+        }
+
+        // 轮询登录状态
+        function startPolling() {
+            if (pollTimer) clearInterval(pollTimer);
+            pollTimer = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/qr-status');
+                    const data = await res.json();
+
+                    // 显示二维码图片
+                    if (data.qr_url) {
+                        const qrImg = document.getElementById('qrImage');
+                        const qrContainer = document.getElementById('qrImageContainer');
+                        if (qrImg && qrContainer) {
+                            qrImg.src = data.qr_url;
+                            qrImg.classList.remove('hidden');
+                            qrContainer.classList.add('hidden');
+                        }
+                    }
+
+                    if (data.status === 'success') {
+                        clearInterval(pollTimer);
+                        // 登录成功，刷新页面进入主控
+                        location.reload();
+                    } else if (data.status === 'error') {
+                        clearInterval(pollTimer);
+                        alert('登录失败: ' + data.error);
+                        location.reload();
+                    }
+                } catch (e) {
+                    // 忽略网络错误，继续轮询
+                }
+            }, 2000);
+        }
+
+        // 退出登录
+        async function logout() {
+            if (!confirm('确定要退出登录吗？')) return;
+            await fetch('/api/logout', { method: 'POST' });
+            location.reload();
+        }
+
+        // 加载所有数据
+        async function loadAll() {
+            await Promise.all([
+                loadScenes(),
+                loadDevices()
+            ]);
+            updateEnvBar();
+            updateLastUpdate();
+        }
+
+        // 更新顶部环境信息栏
+        function updateEnvBar() {
+            const allDevices = window.allDevices || [];
+            if (allDevices.length === 0) return;
+
+            // 统计在线设备数
+            const onlineCount = allDevices.filter(d => d.online).length;
+            document.getElementById('envDevices').textContent = onlineCount;
+
+            // 找传感器
+            const sensor = allDevices.find(d => d.icon === 'sensor' && d.online);
+            if (sensor) {
+                // 尝试读取传感器数据（蓝牙设备可能读不到）
+                loadSensorData(sensor.did).then(data => {
+                    if (data) {
+                        if (data.temp) document.getElementById('envTemp').textContent = data.temp + '°';
+                        if (data.hum) document.getElementById('envHum').textContent = data.hum + '%';
+                    }
+                });
+            }
+
+            // 找路由器
+            const router = allDevices.find(d => d.icon === 'router');
+            if (router) {
+                document.getElementById('envNet').textContent = router.online ? '在线' : '离线';
+            }
+
+            // 显示环境栏
+            document.getElementById('envBar').classList.remove('hidden');
+        }
+
+        function updateLastUpdate() {
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent =
+                `最后更新: ${now.toLocaleTimeString()}`;
+        }
+
+        // 加载场景
+        async function loadScenes() {
+            try {
+                const res = await fetch('/api/scenes');
+                const scenes = await res.json();
+                const grid = document.getElementById('scenesGrid');
+
+                if (!scenes || scenes.length === 0) {
+                    grid.innerHTML = '<p class="text-slate-500 text-sm py-4">暂无场景，可在米家APP中添加</p>';
+                    return;
+                }
+
+                grid.innerHTML = scenes.slice(0, 10).map(s => `
+                    <div class="scene-card flex-shrink-0 px-5 py-4 rounded-xl min-w-[100px] text-center"
+                         onclick="runScene('${s.scene_id || s.id}')">
+                        <div class="text-2xl mb-1">🎬</div>
+                        <div class="font-medium text-sm whitespace-nowrap">${s.name || '场景'}</div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                document.getElementById('scenesGrid').innerHTML =
+                    '<p class="text-slate-500 text-sm py-4">加载场景失败</p>';
+            }
+        }
+
+        // 执行场景
+        async function runScene(sceneId) {
+            try {
+                await fetch('/api/scene/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scene_id: sceneId })
+                });
+                // 执行后刷新设备状态
+                setTimeout(loadDevices, 1500);
+            } catch (e) {
+                alert('执行失败');
+            }
+        }
+
+        // 加载设备
+        async function loadDevices() {
+            try {
+                const res = await fetch('/api/devices');
+                if (res.status === 401) {
+                    showLoginPage();
+                    return;
+                }
+                const homes = await res.json();
+                const container = document.getElementById('roomsContainer');
+
+                let totalDevices = 0;
+                let onlineCount = 0;
+                let html = '';
+
+                for (const home of homes) {
+                    for (const [roomName, devices] of Object.entries(home.rooms)) {
+                        totalDevices += devices.length;
+                        onlineCount += devices.filter(d => d.online).length;
+
+                        html += `
+                            <div class="mb-8">
+                                <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                                    <span>🚪</span> ${roomName}
+                                    <span class="text-sm font-normal text-slate-400">(${devices.length}台)</span>
+                                </h2>
+                                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                    ${devices.map(dev => renderDeviceCard(dev)).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+
+                container.innerHTML = html || '<p class="text-slate-500 text-center py-12">暂无设备</p>';
+                document.getElementById('deviceCount').textContent = `${onlineCount}/${totalDevices} 在线`;
+                document.getElementById('deviceCount').classList.remove('hidden');
+
+                // 批量读取在线设备状态
+                const allDevices = [];
+                for (const home of homes) {
+                    for (const [_, devs] of Object.entries(home.rooms)) {
+                        allDevices.push(...devs);
+                    }
+                }
+                window.allDevices = allDevices;
+                const onlineDevices = allDevices.filter(d => d.online);
+                loadAllDeviceStatus(onlineDevices);
+            } catch (e) {
+                document.getElementById('roomsContainer').innerHTML =
+                    '<p class="text-slate-500 text-center py-12">加载设备失败</p>';
+            }
+        }
+
+        // 设置灯具亮度
+        async function setBrightness(did, value) {
+            const valEl = document.querySelector(`#detail-${did} .bright-val`);
+            if (valEl) valEl.textContent = value + '%';
+            try {
+                await fetch('/api/device/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ did, siid: 2, piid: 2, value: parseInt(value) })
+                });
+            } catch (e) { console.error('设置亮度失败', e); }
+        }
+
+        // 设置空调温度
+        async function setTemp(did, delta) {
+            const valEl = document.querySelector(`#detail-${did} .temp-val`);
+            let current = parseInt(valEl?.textContent) || 26;
+            current = Math.max(16, Math.min(30, current + delta));
+            if (valEl) valEl.textContent = current;
+            try {
+                await fetch('/api/device/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ did, siid: 2, piid: 2, value: current })
+                });
+            } catch (e) { console.error('设置温度失败', e); }
+        }
+
+        // 设置窗帘开合
+        async function setCurtain(did, value) {
+            const valEl = document.querySelector(`#detail-${did} .curtain-val`);
+            if (valEl) valEl.textContent = value + '%';
+            try {
+                await fetch('/api/device/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ did, siid: 2, piid: 2, value: parseInt(value) })
+                });
+            } catch (e) { console.error('设置窗帘失败', e); }
+        }
+
+        // 展开/收起二级详情面板
+        function toggleDetail(did) {
+            const panel = document.getElementById(`detail-${did}`);
+            if (panel) {
+                panel.classList.toggle('hidden');
+            }
+        }
+
+        // 重命名设备
+        function editName(did) {
+            const currentName = document.getElementById(`name-${did}`)?.textContent || '';
+            const newName = prompt('输入新的设备名称：', currentName);
+            if (newName !== null && newName.trim() !== '') {
+                localStorage.setItem(`devname_${did}`, newName.trim());
+                const nameEl = document.getElementById(`name-${did}`);
+                if (nameEl) {
+                    nameEl.textContent = newName.trim();
+                    nameEl.title = newName.trim();
+                }
+            }
+        }
+
+        // 设置灯具色温 (单位: 开尔文K)
+        async function setColorTemp(did, value) {
+            const valEl = document.querySelector(`#detail-${did} .ct-val`);
+            let label = '中性';
+            if (value < 3200) label = '暖黄';
+            else if (value > 5500) label = '冷白';
+            if (valEl) valEl.textContent = label;
+            try {
+                await fetch('/api/device/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ did, siid: 2, piid: 3, value: parseInt(value) })
+                });
+            } catch (e) { console.error('设置色温失败', e); }
+        }
+
+        // 设置音箱音量
+        async function setSpeakerVolume(did, value) {
+            const valEl = document.querySelector(`#detail-${did} .vol-val`);
+            if (valEl) valEl.textContent = value;
+            try {
+                await fetch('/api/device/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ did, siid: 2, piid: 1, value: parseInt(value) })
+                });
+            } catch (e) { console.error('设置音量失败', e); }
+        }
+
+        // 设置空调模式
+        async function setAcMode(did, mode, btnEl) {
+            // 更新按钮样式
+            const card = document.getElementById(`dev-${did}`);
+            card.querySelectorAll('.ac-mode-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-500/20', 'text-blue-400', 'border-blue-500/30');
+                btn.classList.add('bg-slate-600/50', 'text-slate-400', 'border-slate-600');
+            });
+            btnEl.classList.remove('bg-slate-600/50', 'text-slate-400', 'border-slate-600');
+            btnEl.classList.add('bg-blue-500/20', 'text-blue-400', 'border-blue-500/30');
+            try {
+                await fetch('/api/device/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ did, siid: 2, piid: 3, value: mode })
+                });
+            } catch (e) { console.error('设置空调模式失败', e); }
+        }
+
+        // 音响播放控制
+        async function speakerControl(did, action) {
+            // 米家音箱播放控制属性可能因型号而异，这里用通用属性尝试
+            // siid=3 是播放控制服务，piid=1 是播放状态
+            let value = 1; // 1=播放, 0=暂停
+            if (action === 'toggle') {
+                // 简单切换，实际需要读取状态
+                console.log('切换播放/暂停');
+            }
+            try {
+                // 注意：不同音箱型号的siid/piid可能不同，这里是通用尝试
+                await fetch('/api/device/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ did, siid: 3, piid: 1, value: value })
+                });
+            } catch (e) { console.error('音响控制失败', e); }
+        }
+
+        // 读取传感器温湿度数据
+        async function loadSensorData(did) {
+            try {
+                const res = await fetch('/api/device/status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        did,
+                        props: [
+                            { siid: 3, piid: 1 }, // 温度
+                            { siid: 3, piid: 2 }  // 湿度
+                        ]
+                    })
+                });
+                const result = await res.json();
+                const panel = document.getElementById(`detail-${did}`);
+                let data = { temp: null, hum: null };
+                if (Array.isArray(result)) {
+                    result.forEach(item => {
+                        if (item.code === 0) {
+                            if (item.piid === 1) {
+                                data.temp = item.value;
+                                if (panel) panel.querySelector('.sensor-temp').textContent = item.value + '°';
+                            } else if (item.piid === 2) {
+                                data.hum = item.value;
+                                if (panel) panel.querySelector('.sensor-hum').textContent = item.value + '%';
+                            }
+                        }
+                    });
+                }
+                return data;
+            } catch (e) {
+                console.error('读取传感器失败', e);
+                return null;
+            }
+        }
+
+        // 批量读取设备状态
+        async function loadAllDeviceStatus(devices) {
+            const noSwitchTypes = ['sensor', 'speaker', 'router', 'watch'];
+            for (const dev of devices) {
+                // 跳过没有开关的设备类型
+                if (noSwitchTypes.includes(dev.icon)) continue;
+
+                try {
+                    const res = await fetch('/api/device/status', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            did: dev.did,
+                            props: [{ siid: 2, piid: 1 }]
+                        })
+                    });
+                    const result = await res.json();
+                    if (result && result[0] && result[0].code === 0) {
+                        const isOn = result[0].value;
+                        updateDeviceUI(dev.did, isOn);
+                    } else {
+                        // 不支持开关属性的设备，显示--
+                        const el = document.getElementById(`status-${dev.did}`);
+                        if (el) el.textContent = '--';
+                    }
+                } catch (e) {
+                    const el = document.getElementById(`status-${dev.did}`);
+                    if (el) el.textContent = '--';
+                }
+            }
+        }
+
+        // 更新设备UI状态
+        function updateDeviceUI(did, isOn) {
+            const card = document.getElementById(`dev-${did}`);
+            const toggle = card?.querySelector('.toggle-switch');
+            const statusEl = document.getElementById(`status-${did}`);
+            if (toggle) toggle.classList.toggle('on', isOn);
+            if (card) card.classList.toggle('on', isOn);
+            if (statusEl) statusEl.textContent = isOn ? '已开启' : '已关闭';
+
+            // 传感器自动加载数据
+            const devType = card?.dataset.type;
+            if (devType === 'sensor') {
+                loadSensorData(did);
+            }
+        }
+
+        // 渲染设备卡片
+        function renderDeviceCard(dev) {
+            const icon = deviceIcons[dev.icon] || deviceIcons.device;
+            const offlineClass = dev.online ? '' : 'opacity-50';
+            // 读取自定义名称
+            const customName = localStorage.getItem(`devname_${dev.did}`) || dev.name;
+            // 判断是否显示开关
+            const noSwitchTypes = ['sensor', 'speaker', 'router', 'watch'];
+            const showSwitch = dev.online && !noSwitchTypes.includes(dev.icon);
+            // 是否可点击展开详情（在线且有详情面板的设备）
+            const hasDetail = dev.online && ['light', 'ac', 'speaker', 'sensor', 'router', 'curtain'].includes(dev.icon);
+
+            // 二级详情面板（根据设备类型）
+            let detailPanel = '';
+            if (dev.online) {
+                if (dev.icon === 'light') {
+                    detailPanel = `
+                        <div class="detail-panel hidden mt-4 pt-4 border-t border-slate-700/50" id="detail-${dev.did}">
+                            <div class="space-y-4">
+                                <!-- 亮度 -->
+                                <div>
+                                    <div class="flex justify-between text-xs text-slate-400 mb-2">
+                                        <span>亮度</span><span class="bright-val">50%</span>
+                                    </div>
+                                    <input type="range" min="1" max="100" value="50" 
+                                        class="w-full h-1.5 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                                        onchange="setBrightness('${dev.did}', this.value)"
+                                        onclick="event.stopPropagation()">
+                                </div>
+                                <!-- 色温 (单位: 开尔文K, 2700暖黄 - 6500冷白) -->
+                                <div>
+                                    <div class="flex justify-between text-xs text-slate-400 mb-2">
+                                        <span>暖光 2700K</span><span class="ct-val">中性</span><span>冷光 6500K</span>
+                                    </div>
+                                    <input type="range" min="2700" max="6500" value="4500" step="100"
+                                        class="w-full h-1.5 bg-gradient-to-r from-amber-400 to-blue-400 rounded-lg appearance-none cursor-pointer"
+                                        onchange="setColorTemp('${dev.did}', this.value)"
+                                        onclick="event.stopPropagation()">
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (dev.icon === 'ac') {
+                    detailPanel = `
+                        <div class="detail-panel hidden mt-4 pt-4 border-t border-slate-700/50" id="detail-${dev.did}">
+                            <div class="space-y-4">
+                                <!-- 温度调节 -->
+                                <div class="flex items-center justify-center gap-6">
+                                    <button class="w-10 h-10 rounded-full bg-slate-600 hover:bg-slate-500 text-white text-lg font-medium transition" 
+                                        onclick="event.stopPropagation(); setTemp('${dev.did}', -1)">−</button>
+                                    <div class="text-center">
+                                        <div class="text-3xl font-bold text-blue-400 temp-val">26</div>
+                                        <div class="text-xs text-slate-500">摄氏度</div>
+                                    </div>
+                                    <button class="w-10 h-10 rounded-full bg-slate-600 hover:bg-slate-500 text-white text-lg font-medium transition"
+                                        onclick="event.stopPropagation(); setTemp('${dev.did}', 1)">+</button>
+                                </div>
+                                <!-- 模式切换 -->
+                                <div class="grid grid-cols-5 gap-1.5">
+                                    <button class="ac-mode-btn py-2 rounded-lg text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30" data-mode="2" onclick="event.stopPropagation(); setAcMode('${dev.did}', 2, this)">
+                                        ❄️<br>制冷
+                                    </button>
+                                    <button class="ac-mode-btn py-2 rounded-lg text-xs bg-slate-600/50 text-slate-400 border border-slate-600" data-mode="4" onclick="event.stopPropagation(); setAcMode('${dev.did}', 4, this)">
+                                        🔥<br>制热
+                                    </button>
+                                    <button class="ac-mode-btn py-2 rounded-lg text-xs bg-slate-600/50 text-slate-400 border border-slate-600" data-mode="3" onclick="event.stopPropagation(); setAcMode('${dev.did}', 3, this)">
+                                        🌬️<br>送风
+                                    </button>
+                                    <button class="ac-mode-btn py-2 rounded-lg text-xs bg-slate-600/50 text-slate-400 border border-slate-600" data-mode="1" onclick="event.stopPropagation(); setAcMode('${dev.did}', 1, this)">
+                                        💧<br>除湿
+                                    </button>
+                                    <button class="ac-mode-btn py-2 rounded-lg text-xs bg-slate-600/50 text-slate-400 border border-slate-600" data-mode="0" onclick="event.stopPropagation(); setAcMode('${dev.did}', 0, this)">
+                                        🔄<br>自动
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (dev.icon === 'speaker') {
+                    detailPanel = `
+                        <div class="detail-panel hidden mt-4 pt-4 border-t border-slate-700/50" id="detail-${dev.did}">
+                            <div class="space-y-4">
+                                <!-- 播放控制 -->
+                                <div class="flex items-center justify-center gap-5">
+                                    <button class="w-9 h-9 rounded-full bg-slate-600 hover:bg-slate-500 text-white transition text-sm" onclick="event.stopPropagation(); speakerControl('${dev.did}', 'prev')">
+                                        ⏮
+                                    </button>
+                                    <button class="w-12 h-12 rounded-full bg-blue-500 hover:bg-blue-400 text-white transition shadow-lg shadow-blue-500/30" onclick="event.stopPropagation(); speakerControl('${dev.did}', 'toggle')">
+                                        ▶️
+                                    </button>
+                                    <button class="w-9 h-9 rounded-full bg-slate-600 hover:bg-slate-500 text-white transition text-sm" onclick="event.stopPropagation(); speakerControl('${dev.did}', 'next')">
+                                        ⏭
+                                    </button>
+                                </div>
+                                <!-- 音量调节 -->
+                                <div>
+                                    <div class="flex justify-between text-xs text-slate-400 mb-2">
+                                        <span>🔈 音量</span><span class="vol-val">--</span>
+                                    </div>
+                                    <input type="range" min="0" max="100" value="50" 
+                                        class="w-full h-1.5 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                        onchange="setSpeakerVolume('${dev.did}', this.value)"
+                                        onclick="event.stopPropagation()">
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (dev.icon === 'sensor') {
+                    detailPanel = `
+                        <div class="detail-panel hidden mt-4 pt-4 border-t border-slate-700/50" id="detail-${dev.did}">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="text-center p-3 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                                    <div class="text-2xl font-bold text-orange-400 sensor-temp">--°</div>
+                                    <div class="text-xs text-slate-500">温度</div>
+                                </div>
+                                <div class="text-center p-3 bg-cyan-500/10 rounded-lg border border-cyan-500/20">
+                                    <div class="text-2xl font-bold text-cyan-400 sensor-hum">--%</div>
+                                    <div class="text-xs text-slate-500">湿度</div>
+                                </div>
+                            </div>
+                            <div class="text-xs text-slate-500 text-center mt-2">蓝牙设备，数据可能延迟</div>
+                        </div>
+                    `;
+                } else if (dev.icon === 'router') {
+                    detailPanel = `
+                        <div class="detail-panel hidden mt-4 pt-4 border-t border-slate-700/50" id="detail-${dev.did}">
+                            <div class="text-center p-3 bg-slate-700/30 rounded-lg">
+                                <div class="text-green-400 font-medium">📶 在线运行中</div>
+                                <div class="text-xs text-slate-500 mt-1">型号: ${dev.model || ''}</div>
+                            </div>
+                            <div class="text-xs text-slate-500 text-center mt-2">网速监控需路由器API支持</div>
+                        </div>
+                    `;
+                }
+            }
+
+            return `
+                <div class="device-card rounded-xl p-5 ${offlineClass} ${hasDetail ? 'cursor-pointer' : ''}" id="dev-${dev.did}" 
+                     data-did="${dev.did}" data-type="${dev.icon}"
+                     onclick="${hasDetail ? `toggleDetail('${dev.did}')` : ''}">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="device-icon">${icon}</div>
+                        <div class="flex items-center gap-2">
+                            <button class="rename-btn text-slate-500 hover:text-blue-400 text-xs transition" 
+                                onclick="event.stopPropagation(); editName('${dev.did}')" title="重命名">✏️</button>
+                            ${!dev.online ? '<span class="offline-badge text-xs px-2 py-0.5 rounded-full">离线</span>' : ''}
+                            ${showSwitch ? `<div class="toggle-switch" data-did="${dev.did}" onclick="event.stopPropagation(); toggleDevice('${dev.did}')"></div>` : ''}
+                        </div>
+                    </div>
+                    <div class="font-medium mb-1 truncate dev-name" title="${customName}" id="name-${dev.did}">${customName}</div>
+                    <div class="text-xs text-slate-400 mb-3 truncate">${dev.model || ''}</div>
+                    <div class="device-status text-sm text-slate-300" id="status-${dev.did}">
+                        ${dev.online ? (showSwitch ? '读取中...' : '在线') : '离线'}
+                    </div>
+                    ${detailPanel}
+                </div>
+            `;
+        }
+
+        // 切换设备开关
+        async function toggleDevice(did) {
+            const card = document.getElementById(`dev-${did}`);
+            const toggle = card.querySelector('.toggle-switch');
+            const isOn = toggle.classList.contains('on');
+            const newValue = !isOn;
+
+            // 立即更新UI（乐观更新）
+            toggle.classList.toggle('on', newValue);
+            card.classList.toggle('on', newValue);
+            document.getElementById(`status-${did}`).textContent = newValue ? '已开启' : '已关闭';
+
+            try {
+                const res = await fetch('/api/device/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        did: did,
+                        siid: 2,
+                        piid: 1,
+                        value: newValue
+                    })
+                });
+                const result = await res.json();
+                if (result.status !== 'success') {
+                    throw new Error(result.message);
+                }
+            } catch (e) {
+                // 失败回滚
+                toggle.classList.toggle('on', isOn);
+                card.classList.toggle('on', isOn);
+                document.getElementById(`status-${did}`).textContent = isOn ? '已开启' : '已关闭';
+                console.error('控制失败', e);
+            }
+        }
+
+        // 手动刷新
+        function refreshAll() {
+            loadAll();
+        }
+
+        // 启动
+        init();
+    </script>
+</body>
+</html>
