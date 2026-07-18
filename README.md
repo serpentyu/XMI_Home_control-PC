@@ -1,2 +1,2 @@
-# XMI_control-for-PC
+# XMI_Home control unit module-for-PC
 XMI,control with PC, doesnt need  account required. For personal entertainment purposes only，Not for commercial use
